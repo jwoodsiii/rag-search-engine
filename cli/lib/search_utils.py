@@ -2,6 +2,8 @@ import json
 import os
 import string
 
+from nltk.stem import PorterStemmer
+
 DEFAULT_SEARCH_LIMIT = 5
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -35,9 +37,10 @@ def remove_stopwords(text: list[str], stopwords: list[str]) -> list[str]:
 
 
 def has_matching_token(query_tokens: list[str], title_tokens: list[str]) -> bool:
+    stemmer = PorterStemmer()
     for query_token in query_tokens:
         for title_token in title_tokens:
-            if query_token in title_token:
+            if stemmer.stem(query_token) in stemmer.stem(title_token):
                 return True
     return False
 
