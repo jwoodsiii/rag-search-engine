@@ -25,9 +25,12 @@ def load_stopwords() -> list[str]:
 
 
 def tokenize(line: str) -> list[str]:
+    stemmer = PorterStemmer()
     text = preprocess_text(line)
     stopwords = load_stopwords()
-    return remove_stopwords([tok for tok in text.split() if tok], stopwords)
+    return remove_stopwords(
+        [stemmer.stem(tok) for tok in text.split() if tok], stopwords
+    )
 
 
 def remove_stopwords(text: list[str], stopwords: list[str]) -> list[str]:

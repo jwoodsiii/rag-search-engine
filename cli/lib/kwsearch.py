@@ -28,11 +28,11 @@ class InvertedIndex:
 
     def __add_document(self, doc_id: int, text: str) -> None:
         docs = tokenize(text)
-        for tok in docs:
+        for tok in set(docs):
             self.index[tok].add(doc_id)
 
     def get_documents(self, term: str) -> list[int]:
-        ids = self.index.get(term.lower(), set())
+        ids = self.index.get(term, set())
         return sorted(list(ids))
 
     def build(self) -> None:
@@ -50,24 +50,57 @@ class InvertedIndex:
         with open(self.docmap_path, "wb") as f:
             pickle.dump(self.docmap, f)
 
+    def load(self) -> None:
+        try:
+            with open(self.index_path, "rb") as f:
+                idx = pickle.load(f)
+                self.index = idx
+            with open(self.docmap_path, "rb") as f:
+                docmap = pickle.load(f)
+                self.docmap = docmap
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Index file not found at {self.index_path}")
+
 
 def build_command() -> None:
     idx = InvertedIndex()
     idx.build()
     idx.save()
-    docs = idx.get_documents("merida")
-    print(f"First document for token `merida` = {docs[0]}")
+    # docs = idx.get_documents("merida")
+    # print(f"First document for token `merida` = {docs[0]}")
 
 
 def search_command(query: str, limit: int = DEFAULT_SEARCH_LIMIT) -> list[dict]:
-    movies = load_movies()
-    results = []
-    for movie in movies:
-        query_tokens = tokenize(query)
-        title_tokens = tokenize(movie["title"])
-        if has_matching_token(query_tokens, title_tokens):
-            results.append(movie)
-            if len(results) >= limit:
-                break
+    idx = InvertedIndex()
+    try:
+        idx.load()
+    except FileNotFoundError:
+        print("Index file not found")
+        sys.exit(1)
 
+    results = []
+    processed = set()
+    # print(f"idx: {idx.index.get('1')}")
+    # print(f"docmap: {idx.docmap.get(3586)}")
+    for token in tokenize(query):
+        # print(
+        #     "LOOKUP:",
+        #     repr(token),
+        #     "exists_in_index?",
+        #     token in idx.index,
+        #     "lower_exists?",
+        #     token.lower() in idx.index,
+        # )
+        docs = idx.get_documents(token)
+        # print("DOC COUNT:", len(docs), "FIRST:", docs[:5])
+        for id in docs:
+            if id in processed:
+                continue
+            if len(processed) >= limit:
+                return results
+            mov = idx.docmap.get(id)
+            if mov is None:
+                continue
+            results.append(mov)
+            processed.add(id)
     return results
