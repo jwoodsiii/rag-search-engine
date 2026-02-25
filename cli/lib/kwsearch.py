@@ -1,5 +1,6 @@
 # import string
 
+import math
 import os
 import pickle
 import sys
@@ -38,6 +39,12 @@ class InvertedIndex:
             self.index[tok].add(doc_id)
             self.term_frequencies[doc_id][tok] + 1
 
+    def __normalize_term(self, term: str) -> list[str]:
+        tok = tokenize(term)
+        if len(tok) == 0:
+            raise ValueError("Term must contain at least 1 token")
+        return tok
+
     def get_documents(self, term: str) -> list[int]:
         ids = self.index.get(term, set())
         return sorted(list(ids))
@@ -46,7 +53,21 @@ class InvertedIndex:
         tok = tokenize(term)
         if len(tok) != 1:
             raise ValueError("Term must be a single token")
+        # tok = self.__normalize_term(term)
         return self.term_frequencies[doc_id][tok[0]]
+
+    def get_idf(self, term: str) -> float:
+        # calculate idf, first get total doc count
+        tok = tokenize(term)
+        if len(tok) != 1:
+            raise ValueError("Term must be a single token")
+        doc_count = len(self.docmap)
+        # print(f"docmap len: {len(self.docmap)}")
+        # now get the documents that the term appears in
+        appearances = self.get_documents(tok[0])
+        # print(f"Get documents result: {appearances}")
+        # return idf
+        return math.log((doc_count + 1) / (len(appearances) + 1))
 
     def build(self) -> None:
         movies = load_movies()
@@ -78,6 +99,16 @@ class InvertedIndex:
                 self.term_frequencies = tf
         except FileNotFoundError:
             raise FileNotFoundError(f"Index file not found at {self.index_path}")
+
+
+def idf_command(term: str) -> float:
+    idx = InvertedIndex()
+    try:
+        idx.load()
+    except FileNotFoundError:
+        print("Index file not found")
+        sys.exit(1)
+    return idx.get_idf(term.lower())
 
 
 def tf_command(doc_id: int, term: str) -> int:

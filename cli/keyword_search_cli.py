@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 
-from lib.kwsearch import build_command, search_command, tf_command
+from lib.kwsearch import build_command, idf_command, search_command, tf_command
 
 
 def main() -> None:
@@ -9,6 +9,7 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     subparsers.add_parser("build", help="Build movies inverted index")
+
     search_parser = subparsers.add_parser("search", help="Search movies using BM25")
     search_parser.add_argument("query", type=str, help="Search query")
     tf_parser = subparsers.add_parser(
@@ -16,6 +17,10 @@ def main() -> None:
     )
     tf_parser.add_argument("doc_id", type=int, help="Document to search term for")
     tf_parser.add_argument("term", type=str, help="Term to search frequency for")
+    idf_parser = subparsers.add_parser(
+        "idf", help="Get inverse document frequency for provided term"
+    )
+    idf_parser.add_argument("term", type=str, help="Term to search for")
 
     args = parser.parse_args()
 
@@ -37,6 +42,11 @@ def main() -> None:
             )
             freq = tf_command(args.doc_id, args.term)
             print(f"Frequency: {freq}")
+
+        case "idf":
+            print(f"Pulling inverse document frequency for term {args.term}")
+            idf = idf_command(args.term)
+            print(f"Inverse document frequency of '{args.term}': {idf:.2f}")
 
         case _:
             parser.print_help()
