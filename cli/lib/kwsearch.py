@@ -69,6 +69,12 @@ class InvertedIndex:
         # return idf
         return math.log((doc_count + 1) / (len(appearances) + 1))
 
+    def get_tfidf(self, doc_id: int, term: str) -> float:
+        tok = tokenize(term)
+        if len(tok) != 1:
+            raise ValueError("Term must be a single token")
+        return self.get_tf(doc_id, tok[0]) * self.get_idf(tok[0])
+
     def build(self) -> None:
         movies = load_movies()
         for movie in movies:
@@ -99,6 +105,16 @@ class InvertedIndex:
                 self.term_frequencies = tf
         except FileNotFoundError:
             raise FileNotFoundError(f"Index file not found at {self.index_path}")
+
+
+def tfidf_command(doc_id: int, term: str) -> float:
+    idx = InvertedIndex()
+    try:
+        idx.load()
+    except FileNotFoundError:
+        print("Index file not found")
+        sys.exit(1)
+    return idx.get_tfidf(doc_id, term.lower())
 
 
 def idf_command(term: str) -> float:

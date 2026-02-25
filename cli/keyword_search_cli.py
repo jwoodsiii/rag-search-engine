@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 import argparse
 
-from lib.kwsearch import build_command, idf_command, search_command, tf_command
+from lib.kwsearch import (
+    build_command,
+    idf_command,
+    search_command,
+    tf_command,
+    tfidf_command,
+)
 
 
 def main() -> None:
@@ -21,6 +27,12 @@ def main() -> None:
         "idf", help="Get inverse document frequency for provided term"
     )
     idf_parser.add_argument("term", type=str, help="Term to search for")
+
+    tfidf_parser = subparsers.add_parser(
+        "tfidf", help="Get tfidf score for provided docid and term"
+    )
+    tfidf_parser.add_argument("doc_id", type=int, help="Document to search term for")
+    tfidf_parser.add_argument("term", type=str, help="Term to search for")
 
     args = parser.parse_args()
 
@@ -44,9 +56,18 @@ def main() -> None:
             print(f"Frequency: {freq}")
 
         case "idf":
-            print(f"Pulling inverse document frequency for term {args.term}")
+            print(f"Calculating inverse document frequency for term {args.term}")
             idf = idf_command(args.term)
             print(f"Inverse document frequency of '{args.term}': {idf:.2f}")
+
+        case "tfidf":
+            print(
+                f"Calculating tfidf score for term {args.term} in document {args.doc_id}"
+            )
+            tfidf = tfidf_command(args.doc_id, args.term)
+            print(
+                f"TF-IDF score of '{args.term}' in document '{args.doc_id}': {tfidf:.2f}"
+            )
 
         case _:
             parser.print_help()
