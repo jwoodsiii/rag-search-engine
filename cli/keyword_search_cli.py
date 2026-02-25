@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 
-from lib.kwsearch import build_command, search_command
+from lib.kwsearch import build_command, search_command, tf_command
 
 
 def main() -> None:
@@ -11,6 +11,11 @@ def main() -> None:
     subparsers.add_parser("build", help="Build movies inverted index")
     search_parser = subparsers.add_parser("search", help="Search movies using BM25")
     search_parser.add_argument("query", type=str, help="Search query")
+    tf_parser = subparsers.add_parser(
+        "tf", help="List term frequency for provided document id"
+    )
+    tf_parser.add_argument("doc_id", type=int, help="Document to search term for")
+    tf_parser.add_argument("term", type=str, help="Term to search frequency for")
 
     args = parser.parse_args()
 
@@ -26,6 +31,12 @@ def main() -> None:
             print("Building movie index")
             build_command()
             print("Inverted index built successfully.")
+        case "tf":
+            print(
+                f"Pulling term frequency for term: {args.term} from document: {args.doc_id}"
+            )
+            freq = tf_command(args.doc_id, args.term)
+            print(f"Frequency: {freq}")
 
         case _:
             parser.print_help()

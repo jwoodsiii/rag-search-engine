@@ -3,7 +3,7 @@
 import os
 import pickle
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
@@ -23,17 +23,30 @@ class InvertedIndex:
     ) -> None:
         self.index = defaultdict(set)
         self.docmap: dict[int, dict] = {}
+        self.term_frequencies = defaultdict(Counter)
         self.index_path = os.path.join(CACHE_DIR, "index.pkl")
         self.docmap_path = os.path.join(CACHE_DIR, "docmap.pkl")
+        self.tf_path = os.path.join(CACHE_DIR, "term_frequencies.pkl")
 
     def __add_document(self, doc_id: int, text: str) -> None:
         docs = tokenize(text)
+        ctr = Counter(docs)
+        for k in ctr:
+            self.index[k].add(doc_id)
+            self.term_frequencies[doc_id] = ctr
         for tok in set(docs):
             self.index[tok].add(doc_id)
+            self.term_frequencies[doc_id][tok] + 1
 
     def get_documents(self, term: str) -> list[int]:
         ids = self.index.get(term, set())
         return sorted(list(ids))
+
+    def get_tf(self, doc_id: int, term: str) -> int:
+        tok = tokenize(term)
+        if len(tok) != 1:
+            raise ValueError("Term must be a single token")
+        return self.term_frequencies[doc_id][tok[0]]
 
     def build(self) -> None:
         movies = load_movies()
@@ -49,6 +62,8 @@ class InvertedIndex:
             pickle.dump(self.index, f)
         with open(self.docmap_path, "wb") as f:
             pickle.dump(self.docmap, f)
+        with open(self.tf_path, "wb") as f:
+            pickle.dump(self.term_frequencies, f)
 
     def load(self) -> None:
         try:
@@ -58,8 +73,22 @@ class InvertedIndex:
             with open(self.docmap_path, "rb") as f:
                 docmap = pickle.load(f)
                 self.docmap = docmap
+            with open(self.tf_path, "rb") as f:
+                tf = pickle.load(f)
+                self.term_frequencies = tf
         except FileNotFoundError:
             raise FileNotFoundError(f"Index file not found at {self.index_path}")
+
+
+def tf_command(doc_id: int, term: str) -> int:
+    idx = InvertedIndex()
+    try:
+        idx.load()
+    except FileNotFoundError:
+        print("Index file not found")
+        sys.exit(1)
+
+    return idx.get_tf(doc_id, term)
 
 
 def build_command() -> None:
