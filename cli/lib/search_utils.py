@@ -28,16 +28,12 @@ def tokenize(line: str) -> list[str]:
     stemmer = PorterStemmer()
     text = preprocess_text(line)
     stopwords = load_stopwords()
-    return remove_stopwords(
-        [stemmer.stem(tok) for tok in text.split() if tok], stopwords
-    )
+    tmp = remove_stopwords(text.split(), stopwords)
+    return [stemmer.stem(tok) for tok in tmp]
 
 
-def remove_stopwords(text: list[str], stopwords: list[str]) -> list[str]:
-    for w in text:
-        if w in stopwords:
-            text.remove(w)
-    return text
+def remove_stopwords(tokens: list[str], stopwords: list[str]) -> list[str]:
+    return [t for t in tokens if t not in stopwords]
 
 
 def has_matching_token(query_tokens: list[str], title_tokens: list[str]) -> bool:
