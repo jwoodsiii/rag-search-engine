@@ -11,9 +11,26 @@ class SemanticSearch:
     def __init__(self):
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
         self.embeddings = None
-        self.documents = None
+        self.documents: list[dict]
         self.document_map = dict()
         self.embedding_path = os.path.join(CACHE_DIR, "movie_embeddings.npy")
+
+    def search(self, query, limit):
+        if self.embeddings is None:
+            raise ValueError(
+                "No embeddings loaded. Call `load_or_create_embeddings` first."
+            )
+        query_embedding = self.model.encode([query])[0]
+        scores = [cosine_similarity(query_embedding, emb) for emb in self.embeddings]
+        top_indices = np.argsort(scores)[::-1][:limit]
+        return [
+            {
+                "score": scores[i],
+                "title": self.documents[i]["title"],
+                "description": self.documents[i]["description"],
+            }
+            for i in top_indices
+        ]
 
     def load_or_create_embeddings(self, documents):
         self.documents = documents
@@ -45,6 +62,28 @@ class SemanticSearch:
         tlist.append(text)
         print(f"DEBUG: tlist = {tlist}")
         return self.model.encode(tlist)[0]
+
+
+def search(query, limit):
+    model = SemanticSearch()
+    movies = load_movies()
+    model.load_or_create_embeddings(movies)
+    output = model.search(query, limit)
+    for i in output:
+        print(
+            f"{i.get('title')} (score: {i.get('score')})\n{i['description'][:100]}..."
+        )
+
+
+def cosine_similarity(vec1, vec2):
+    dot_product = np.dot(vec1, vec2)
+    norm1 = np.linalg.norm(vec1)
+    norm2 = np.linalg.norm(vec2)
+
+    if norm1 == 0 or norm2 == 0:
+        return 0.0
+
+    return dot_product / (norm1 * norm2)
 
 
 def verify_embeddings():

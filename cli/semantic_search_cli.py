@@ -6,6 +6,7 @@ from enum import verify
 from lib.semantic_search import (
     embed_query_text,
     embed_text,
+    search,
     verify_embeddings,
     verify_model,
 )
@@ -30,6 +31,12 @@ def main():
         "embedquery", help="Generate embedding for query"
     )
     embedquery_parser.add_argument("query", help="Query to generate embeddings for")
+
+    search_parser = subparsers.add_parser("search", help="Search for documents")
+    search_parser.add_argument("query", help="Query to search for")
+    search_parser.add_argument(
+        "--limit", type=int, default=5, help="Number of results to return"
+    )
     args = parser.parse_args()
 
     match args.command:
@@ -49,6 +56,10 @@ def main():
             print("Embedding query")
             embed_query_text(args.query)
             print("Finished embedding query...")
+        case "search":
+            print("Searching for documents")
+            search(args.query, args.limit)
+            print("Finished searching...")
         case _:
             parser.print_help()
 
