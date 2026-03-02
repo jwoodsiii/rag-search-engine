@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
 import argparse
+from enum import verify
 
-from lib.semantic_search import embed_text, verify_model
+from lib.semantic_search import embed_text, verify_embeddings, verify_model
 
 
 def main():
@@ -15,6 +16,10 @@ def main():
         "embed_text", help="Generate embeddings for provided text"
     )
     embed_parser.add_argument("text", help="Text to generate embeddings for")
+
+    verify_embed_parser = subparsers.add_parser(
+        "verify_embeddings", help="Verify embeddings"
+    )
     args = parser.parse_args()
 
     match args.command:
@@ -26,6 +31,10 @@ def main():
             print("Generate embeddings for text")
             embed_text(args.text)
             print("Finished generating embeddings...")
+        case "verify_embeddings":
+            print("Verifying embeddings")
+            verify_embeddings()
+            print("Finished verifying embeddings...")
         case _:
             parser.print_help()
 
