@@ -6,12 +6,15 @@ from lib.kwsearch import (
     BM25_K1,
     bm25_idf_command,
     bm25_tf_command,
+    bm25search_command,
     build_command,
     idf_command,
     search_command,
     tf_command,
     tfidf_command,
 )
+
+from cli.lib.search_utils import DEFAULT_SEARCH_LIMIT
 
 
 def main() -> None:
@@ -55,6 +58,18 @@ def main() -> None:
     )
     bm25_tf_parser.add_argument(
         "b", type=float, nargs="?", default=BM25_B, help="Tunable BM25 b parameter"
+    )
+
+    bm25search_parser = subparsers.add_parser(
+        "bm25search", help="Search movies using full BM25 scoring"
+    )
+    bm25search_parser.add_argument("query", type=str, help="Search query")
+    bm25search_parser.add_argument(
+        "limit",
+        type=int,
+        nargs="?",
+        default=DEFAULT_SEARCH_LIMIT,
+        help="limit search results",
     )
 
     args = parser.parse_args()
@@ -104,6 +119,9 @@ def main() -> None:
             print(
                 f"BM25 TF score of '{args.term}' in document '{args.doc_id}': {bm25tf:.2f}"
             )
+        case "bm25search":
+            print(f"Searching movies using full BM25 scoring for query '{args.query}'")
+            bm25search_command(args.query, args.limit)
 
         case _:
             parser.print_help()

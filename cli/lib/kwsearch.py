@@ -55,6 +55,24 @@ class InvertedIndex:
             total_length += length
         return total_length / len(self.doc_lengths)
 
+    def bm25_search(
+        self, query: str, limit: int = DEFAULT_SEARCH_LIMIT
+    ) -> dict[int, float]:
+        tokens = tokenize(query)
+        scores = dict()
+        for doc_id in self.doc_lengths.keys():
+            doc_score = 0
+            for tok in tokens:
+                doc_score += self.bm25(doc_id, tok)
+            scores[doc_id] = doc_score
+        scores = dict(sorted(scores.items(), key=lambda item: item[1], reverse=True))
+        return dict(list(scores.items())[:limit])
+
+    def bm25(self, doc_id: int, term: str) -> float:
+        tf = self.get_bm25_tf(doc_id, term, BM25_K1, BM25_B)
+        idf = self.get_bm25_idf(term)
+        return tf * idf
+
     def get_bm25_tf(
         self, doc_id: int, term: str, k1: float = BM25_K1, b: float = BM25_B
     ) -> float:
@@ -144,6 +162,23 @@ class InvertedIndex:
                 self.doc_lengths = pickle.load(f)
         except FileNotFoundError:
             raise FileNotFoundError(f"Index file not found at {self.index_path}")
+
+
+def bm25search_command(query: str, limit: int = DEFAULT_SEARCH_LIMIT) -> None:
+    idx = InvertedIndex()
+    try:
+        idx.load()
+    except FileNotFoundError:
+        print("Index file not found")
+        sys.exit(1)
+    lmt = 1
+    for doc_id, score in idx.bm25_search(query, limit).items():
+        if lmt >= limit:
+            return
+        print(
+            f"{lmt}. ({doc_id}) {idx.docmap[doc_id].get('title')} - Score: {score:.2f}"
+        )
+        lmt += 1
 
 
 def bm25_tf_command(doc_id: int, term: str, k1=BM25_K1) -> float:
