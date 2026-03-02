@@ -3,7 +3,12 @@
 import argparse
 from enum import verify
 
-from lib.semantic_search import embed_text, verify_embeddings, verify_model
+from lib.semantic_search import (
+    embed_query_text,
+    embed_text,
+    verify_embeddings,
+    verify_model,
+)
 
 
 def main():
@@ -20,6 +25,11 @@ def main():
     verify_embed_parser = subparsers.add_parser(
         "verify_embeddings", help="Verify embeddings"
     )
+
+    embedquery_parser = subparsers.add_parser(
+        "embedquery", help="Generate embedding for query"
+    )
+    embedquery_parser.add_argument("query", help="Query to generate embeddings for")
     args = parser.parse_args()
 
     match args.command:
@@ -35,6 +45,10 @@ def main():
             print("Verifying embeddings")
             verify_embeddings()
             print("Finished verifying embeddings...")
+        case "embedquery":
+            print("Embedding query")
+            embed_query_text(args.query)
+            print("Finished embedding query...")
         case _:
             parser.print_help()
 

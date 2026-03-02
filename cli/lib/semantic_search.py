@@ -58,6 +58,14 @@ def verify_embeddings():
     )
 
 
+def embed_query_text(query: str) -> None:
+    model = SemanticSearch()
+    emb = model.generate_embedding(query)
+    print(f"Query: {query}")
+    print(f"First 5 dimensions: {emb[:5]}")
+    print(f"Shape: {emb.shape}")
+
+
 def embed_text(text: str):
     model = SemanticSearch()
     emb = model.generate_embedding(text)
