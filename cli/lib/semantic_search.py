@@ -75,6 +75,21 @@ def search(query, limit):
         )
 
 
+def chunk_text(text: str, chunk_size: int) -> None:
+    split = text.split()
+    # print(f"chunk size: {chunk_size}")
+    # print(f"length of split: {len(split)}")
+    # print(split[:chunk_size])
+    i = 0
+    chunks = list()
+    print(f"Chunking {len(text)} characters")
+    while i <= len(split):
+        chunks.append(" ".join(split[i : i + chunk_size]))
+        i += chunk_size
+    for i, chunk in enumerate(chunks, start=1):
+        print(f"{i}. {chunk}")
+
+
 def cosine_similarity(vec1, vec2):
     dot_product = np.dot(vec1, vec2)
     norm1 = np.linalg.norm(vec1)

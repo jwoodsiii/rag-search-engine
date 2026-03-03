@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 import argparse
-from enum import verify
 
 from lib.semantic_search import (
+    chunk_text,
     embed_query_text,
     embed_text,
     search,
@@ -37,6 +37,12 @@ def main():
     search_parser.add_argument(
         "--limit", type=int, default=5, help="Number of results to return"
     )
+    chunk_parser = subparsers.add_parser(
+        "chunk",
+        help="Split text into words on whitespace, grouped by <chunk-size> words",
+    )
+    chunk_parser.add_argument("text", type=str, help="Text to chunk")
+    chunk_parser.add_argument("--chunk-size", type=int, default=200, help="Chunk size")
     args = parser.parse_args()
 
     match args.command:
@@ -60,6 +66,10 @@ def main():
             print("Searching for documents")
             search(args.query, args.limit)
             print("Finished searching...")
+        case "chunk":
+            print("Chunking text")
+            chunk_text(args.text, args.chunk_size)
+            print("Finished chunking...")
         case _:
             parser.print_help()
 
