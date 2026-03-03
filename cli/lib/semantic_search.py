@@ -1,4 +1,5 @@
 import os
+import re
 import string
 
 import numpy as np
@@ -75,17 +76,37 @@ def search(query, limit):
         )
 
 
-def chunk_text(text: str, chunk_size: int) -> None:
+def semantic_chunk(text: str, max_chunk_size: int, overlap: int) -> list[str]:
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    output = list()
+    i = 0
+    # print(sentences)
+    chunk = ""
+    while i < len(sentences):
+        chunk = " ".join(sentences[i : i + max_chunk_size])
+        output.append(chunk)
+        step = max_chunk_size - overlap
+        if step <= 0:
+            raise ValueError("overlap must be less than max_chunk_size")
+        i += step
+
+    return output
+
+
+def chunk_text(text: str, chunk_size: int, overlap: int) -> None:
     split = text.split()
-    # print(f"chunk size: {chunk_size}")
-    # print(f"length of split: {len(split)}")
-    # print(split[:chunk_size])
     i = 0
     chunks = list()
     print(f"Chunking {len(text)} characters")
-    while i <= len(split):
-        chunks.append(" ".join(split[i : i + chunk_size]))
-        i += chunk_size
+    while i < len(split):
+        nxt = " ".join(split[i : i + chunk_size])
+        if len(split[i : i + chunk_size]) <= overlap:
+            break
+        chunks.append(nxt)
+        if overlap > 0:
+            i += chunk_size - overlap
+        else:
+            i += chunk_size
     for i, chunk in enumerate(chunks, start=1):
         print(f"{i}. {chunk}")
 
