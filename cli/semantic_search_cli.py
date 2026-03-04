@@ -2,6 +2,7 @@
 
 import argparse
 
+from lib.chunked_semantic_search import embed_chunks, search_chunked
 from lib.semantic_search import (
     chunk_text,
     embed_query_text,
@@ -58,6 +59,18 @@ def main():
         "--overlap", type=int, default=0, help="Overlap size"
     )
 
+    embed_chunks_parser = subparsers.add_parser(
+        "embed_chunks", help="Embed chunks from documents"
+    )
+
+    search_chunked_parser = subparsers.add_parser(
+        "search_chunked", help="Search for documents"
+    )
+    search_chunked_parser.add_argument("query", help="Query to search for")
+    search_chunked_parser.add_argument(
+        "--limit", type=int, default=5, help="Number of results to return"
+    )
+
     args = parser.parse_args()
 
     match args.command:
@@ -91,6 +104,17 @@ def main():
             for i, chunk in enumerate(output):
                 print(f"{i + 1}. {chunk}")
             print("Finished semantic chunking...")
+        case "embed_chunks":
+            print("Embedding chunks")
+            embed_chunks()
+            print("Finished embedding chunks...")
+        case "search_chunked":
+            print("Searching for chunked documents")
+            results = search_chunked(args.query, args.limit)
+            for i, result in enumerate(results, start=1):
+                print(f"\n{i}. {result['title']} (score: {result['score']:.4f})")
+                print(f"    {result['document']}...")
+            print("Finished searching...")
         case _:
             parser.print_help()
 

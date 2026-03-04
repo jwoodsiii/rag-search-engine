@@ -9,8 +9,8 @@ from .search_utils import CACHE_DIR, load_movies
 
 
 class SemanticSearch:
-    def __init__(self):
-        self.model = SentenceTransformer("all-MiniLM-L6-v2")
+    def __init__(self, model_name="all-MiniLM-L6-v2"):
+        self.model = SentenceTransformer(model_name)
         self.embeddings = None
         self.documents: list[dict]
         self.document_map = dict()
@@ -83,6 +83,9 @@ def semantic_chunk(text: str, max_chunk_size: int, overlap: int) -> list[str]:
     # print(sentences)
     chunk = ""
     while i < len(sentences):
+        chunk_sentences = sentences[i : i + max_chunk_size]
+        if output and len(chunk_sentences) <= overlap:
+            break
         chunk = " ".join(sentences[i : i + max_chunk_size])
         output.append(chunk)
         step = max_chunk_size - overlap
