@@ -77,7 +77,15 @@ def search(query, limit):
 
 
 def semantic_chunk(text: str, max_chunk_size: int, overlap: int) -> list[str]:
+    text = text.strip()
+    if text == "":
+        return []
     sentences = re.split(r"(?<=[.!?])\s+", text)
+    if len(sentences) == 1 and not sentences[0].endswith((".", "!", "?")):
+        sentences = [sentences[0]]
+    else:
+        for s in sentences:
+            s.lstrip().rstrip()
     output = list()
     i = 0
     # print(sentences)
@@ -87,6 +95,8 @@ def semantic_chunk(text: str, max_chunk_size: int, overlap: int) -> list[str]:
         if output and len(chunk_sentences) <= overlap:
             break
         chunk = " ".join(sentences[i : i + max_chunk_size])
+        if chunk == "":
+            continue
         output.append(chunk)
         step = max_chunk_size - overlap
         if step <= 0:
