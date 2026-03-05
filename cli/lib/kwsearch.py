@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from .search_utils import (
     CACHE_DIR,
     DEFAULT_SEARCH_LIMIT,
+    format_search_result,
     has_matching_token,
     load_movies,
     tokenize,
@@ -55,18 +56,30 @@ class InvertedIndex:
             total_length += length
         return total_length / len(self.doc_lengths)
 
-    def bm25_search(
-        self, query: str, limit: int = DEFAULT_SEARCH_LIMIT
-    ) -> dict[int, float]:
-        tokens = tokenize(query)
-        scores = dict()
-        for doc_id in self.doc_lengths.keys():
-            doc_score = 0
-            for tok in tokens:
-                doc_score += self.bm25(doc_id, tok)
-            scores[doc_id] = doc_score
-        scores = dict(sorted(scores.items(), key=lambda item: item[1], reverse=True))
-        return dict(list(scores.items())[:limit])
+    def bm25_search(self, query: str, limit: int = DEFAULT_SEARCH_LIMIT) -> list[dict]:
+        query_tokens = tokenize(query)
+
+        scores = {}
+        for doc_id in self.docmap:
+            score = 0.0
+            for token in query_tokens:
+                score += self.bm25(doc_id, token)
+            scores[doc_id] = score
+
+        sorted_docs = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
+        results = []
+        for doc_id, score in sorted_docs[:limit]:
+            doc = self.docmap[doc_id]
+            formatted_result = format_search_result(
+                doc_id=doc["id"],
+                title=doc["title"],
+                document=doc["description"],
+                score=score,
+            )
+            results.append(formatted_result)
+
+        return results
 
     def bm25(self, doc_id: int, term: str) -> float:
         tf = self.get_bm25_tf(doc_id, term, BM25_K1, BM25_B)

@@ -3,12 +3,11 @@ import os
 
 import numpy as np
 
-from .search_utils import CACHE_DIR, load_movies
+from .search_utils import CACHE_DIR, SCORE_PRECISION, load_movies
 from .semantic_search import SemanticSearch, cosine_similarity, semantic_chunk
 
 MAX_CHUNK_SIZE = 4
 OVERLAP_LIMIT = 1
-SCORE_PRECISION = 3
 
 
 class ChunkedSemanticSearch(SemanticSearch):
