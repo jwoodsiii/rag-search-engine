@@ -1,6 +1,12 @@
 import argparse
 
-from lib.hybrid_search import enhance_query, normalize, rrf_search, weighted_search
+from lib.hybrid_search import (
+    enhance_query,
+    normalize,
+    rerank,
+    rrf_search,
+    weighted_search,
+)
 
 
 def main() -> None:
@@ -35,8 +41,14 @@ def main() -> None:
     rrf_search_parser.add_argument(
         "--enhance",
         type=str,
-        choices=["spell", "rewrite"],
+        choices=["spell", "rewrite", "expand"],
         help="Query enhancement method",
+    )
+    rrf_search_parser.add_argument(
+        "--rerank-method",
+        type=str,
+        default="",
+        choices=["individual", "batch"],
     )
 
     args = parser.parse_args()
@@ -51,7 +63,41 @@ def main() -> None:
                     f"Enhanced query ({query['method']}): {query['query']} -> {query['enhanced_query']}"
                 )
                 query = query["enhanced_query"]
-            result = rrf_search(query, args.k, args.limit)
+            if args.rerank_method == "individual":
+                result = rrf_search(query, args.k, args.limit * 5)
+                ranked_res = rerank(query, args.rerank_method, result["results"])
+                print("Re-ranking top 3 results using individual method...")
+                print(
+                    "Reciprocal Rank Fusion Results for 'family movie about bears in the woods' (k=60)"
+                )
+                for i, res in enumerate(ranked_res, start=1):
+                    print(f"{i}. {res['title']}")
+                    print(f"Re-rank Score: {res.get('score', 0):.3f}/10")
+                    print(f"RRF Score: {res.get('rrf_score', 0):.3f}")
+                    print(
+                        f"BM25 Rank: {res.get('bm25_rank', 0)}, Semantic Rank: {res.get('semantic_rank', 0)}"
+                    )
+                    print(f"{res.get('document')}")
+                return
+            elif args.rerank_method == "batch":
+                result = rrf_search(query, args.k, args.limit * 5)
+                ranked_res = rerank(query, args.rerank_method, result["results"])
+                print("Re-ranking top 3 results using batch method...")
+                print(
+                    "Reciprocal Rank Fusion Results for 'family movie about bears in the woods' (k=60)"
+                )
+                for i, res in enumerate(ranked_res, start=1):
+                    print(f"{i}. {res['title']}")
+                    print(f"Re-rank Score: {res.get('score', 0)} ")
+                    print(f"RRF Score: {res.get('rrf_score', 0):.3f}")
+                    print(
+                        f"BM25 Rank: {res.get('bm25_rank', 0)}, Semantic Rank: {res.get('semantic_rank', 0)}"
+                    )
+                    print(f"{res.get('document')}")
+                return
+
+            else:
+                result = rrf_search(query, args.k, args.limit)
             print(f"RRF Search Results for '{result['query']}' (k={result['k']}):")
             for i, res in enumerate(result["results"], 1):
                 print(f"{i}. {res['title']}")

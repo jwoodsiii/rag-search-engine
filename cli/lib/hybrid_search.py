@@ -1,4 +1,6 @@
+import json
 import os
+import time
 
 import numpy as np
 from google import genai
@@ -252,7 +254,11 @@ def enhance_query(query: str, method: str) -> dict:
                 User query: "{query}"
                 """,
             )
-            return {"method": method, "query": query, "enhanced_query": resp.text}
+            return {
+                "method": method,
+                "query": query,
+                "enhanced_query": resp.text.strip(),
+            }
         case "rewrite":
             resp = client.models.generate_content(
                 model="gemma-3-27b-it",
@@ -281,3 +287,131 @@ def enhance_query(query: str, method: str) -> dict:
                 "query": query,
                 "enhanced_query": resp.text.strip(),
             }
+        case "expand":
+            resp = client.models.generate_content(
+                model="gemma-3-27b-it",
+                contents=f"""Expand the user-provided movie search query below with related terms.
+
+                Add synonyms and related concepts that might appear in movie descriptions.
+                Keep expansions relevant and focused.
+                Output only the additional terms; they will be appended to the original query.
+
+                Examples:
+                - "scary bear movie" -> "scary horror grizzly bear movie terrifying film"
+                - "action movie with bear" -> "action thriller bear chase fight adventure"
+                - "comedy with bear" -> "comedy funny bear humor lighthearted"
+
+                User query: "{query}"
+                """,
+            )
+            return {
+                "method": method,
+                "query": query,
+                "enhanced_query": f"{query} {resp.text.strip()} i.q.",
+            }
+
+
+def rerank(query: str, method: str, results: list[dict]) -> list[dict]:
+    client = get_gemini_client()
+    output = list()
+    match method:
+        case "individual":
+            for doc in results:
+                resp = client.models.generate_content(
+                    model="gemma-3-27b-it",
+                    contents=f"""Rate how well this movie matches the search query.
+
+                    Query: "{query}"
+                    Movie: {doc.get("title", "")} - {doc.get("document", "")}
+
+                    Consider:
+                    - Direct relevance to query
+                    - User intent (what they're looking for)
+                    - Content appropriateness
+
+                    Rate 0-10 (10 = perfect match).
+                    Output ONLY the number in your response, no other text or explanation.
+
+                    Score:""",
+                )
+                time.sleep(4)
+                metadata = doc.get("metadata", {})
+
+                if metadata.get("bm25_rank"):
+                    bm25_rank = metadata["bm25_rank"]
+                if metadata.get("semantic_rank"):
+                    semantic_rank = metadata["semantic_rank"]
+                if metadata.get("rrf_score"):
+                    rrf_score = metadata["rrf_score"]
+                output.append(
+                    {
+                        "doc_id": doc["id"],
+                        "title": doc["title"],
+                        "document": doc["document"],
+                        "score": resp.text,
+                        "bm25_rank": bm25_rank,
+                        "semantic_rank": semantic_rank,
+                        "rrf_score": rrf_score,
+                    }
+                )
+
+            return sorted(output, key=lambda x: float(x["score"]), reverse=True)[:3]
+
+        case "batch":
+            doc_list_str = "\n".join(
+                [
+                    f"ID: {doc.get('id', '')}, Title: {doc.get('title', '')}, Document: {doc.get('document', '')[:500]}"
+                    for doc in results
+                ]
+            )
+            # for doc in results:
+            #     print(f"id: {doc.get('id', '')}")
+
+            movie_lookup = {doc["id"]: doc for doc in results}
+            # print(movie_lookup)
+
+            resp = client.models.generate_content(
+                model="gemma-3-27b-it",
+                contents=f"""Rank the movies listed below by relevance to the following search query.
+
+                Query: "{query}"
+
+                Movies:
+                {doc_list_str}
+
+                Return ONLY the movie IDs in order of relevance (best match first). Return a valid JSON list, nothing else.
+
+                For example:
+                [75, 12, 34, 2, 1]
+
+                Ranking:""",
+            )
+
+            res = json.loads(resp.text)
+            # print(res)
+            # print(f"Lookup key type: {type(list(movie_lookup.keys())[0])}")
+            # print(f"LLM ID type: {type(res[0])}")
+            output = list()
+            for rank, id in enumerate(res, start=1):
+                if id in movie_lookup:
+                    metadata = movie_lookup[id].get("metadata", {})
+
+                    if metadata.get("bm25_rank"):
+                        bm25_rank = metadata["bm25_rank"]
+                    if metadata.get("semantic_rank"):
+                        semantic_rank = metadata["semantic_rank"]
+                    if metadata.get("rrf_score"):
+                        rrf_score = metadata["rrf_score"]
+                    output.append(
+                        {
+                            "doc_id": id,
+                            "title": movie_lookup[id].get("title", ""),
+                            "document": movie_lookup[id].get("document", ""),
+                            "score": rank,
+                            "bm25_rank": movie_lookup[id].get("bm25_rank", 0),
+                            "semantic_rank": movie_lookup[id].get("semantic_rank", 0),
+                            "rrf_score": movie_lookup[id].get("rrf_score", 0),
+                        }
+                    )
+
+            return sorted(output, key=lambda x: x["score"])[:3]
