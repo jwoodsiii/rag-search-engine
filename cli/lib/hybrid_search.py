@@ -1,15 +1,16 @@
 import os
 
 import numpy as np
-from torch.functional import norm
-from transformers.core_model_loading import Chunk
+from google import genai
 
 from .chunked_semantic_search import ChunkedSemanticSearch
 from .kwsearch import InvertedIndex
 from .search_utils import (
     DEFAULT_ALPHA,
+    DEFAULT_K,
     DEFAULT_SEARCH_LIMIT,
     format_search_result,
+    get_gemini_client,
     load_movies,
 )
 
@@ -42,7 +43,19 @@ class HybridSearch:
         return combined[:limit]
 
     def rrf_search(self, query: str, k, limit: int = 10) -> None:
-        raise NotImplementedError("RRF hybrid search is not implemented yet.")
+        bm_results = self._bm25_search(query, limit * LIMIT_SCALE)
+        semantic_results = self.semantic_search.search_chunks(
+            query, limit * LIMIT_SCALE
+        )
+        """
+            Combine results using rrf
+                - create dictionary mapping doc_ids to full documents and bm25 and semantic ranks
+                - for each document, calc rrf_score
+                - add score to each doc (if doc is in both searches sum rrf score)
+                - return results sorted by rrf score in descending order
+        """
+        combined = rrf_rank(bm_results, semantic_results, k)
+        return combined[:limit]
 
 
 def normalize(scores: list) -> list:
@@ -72,6 +85,10 @@ def hybrid_score(bm25_score, semantic_score, alpha=0.5):
     return alpha * bm25_score + (1 - alpha) * semantic_score
 
 
+def rrf_score(rank, k=DEFAULT_K):
+    return 1 / (k + rank)
+
+
 def weighted_search(
     query: str, alpha: float = DEFAULT_ALPHA, limit: int = DEFAULT_SEARCH_LIMIT
 ) -> dict:
@@ -89,6 +106,88 @@ def weighted_search(
         "alpha": alpha,
         "results": results,
     }
+
+
+def rrf_search(
+    query: str, k: int = DEFAULT_K, limit: int = DEFAULT_SEARCH_LIMIT
+) -> dict:
+    movies = load_movies()
+    hs = HybridSearch(movies)
+
+    original_query = query
+
+    search_limit = limit
+    results = hs.rrf_search(query, k, search_limit)
+
+    return {
+        "original_query": original_query,
+        "query": query,
+        "k": k,
+        "results": results,
+    }
+
+
+def rrf_rank(
+    bm25_results: list[dict], semantic_results: list[dict], k: int = DEFAULT_K
+) -> list[dict]:
+    combined_rank = {}
+
+    for i, result in enumerate(bm25_results, start=1):
+        doc_id = result["id"]
+        if doc_id not in combined_rank:
+            combined_rank[doc_id] = {
+                "document": result["document"],
+                "title": result["title"],
+                "bm25_rank": i,
+                "semantic_rank": None,
+                "rrf_score": 0.0,
+            }
+        doc = combined_rank[doc_id]
+        if doc.get("bm25_rank") is None:
+            doc["bm25_rank"] = i
+            doc["rrf_score"] += rrf_score(doc["bm25_rank"], DEFAULT_K)
+
+        if doc.get("bm25_rank") and doc.get("semantic_rank"):
+            doc["rrf_score"] += rrf_score(doc["bm25_rank"], DEFAULT_K) + rrf_score(
+                doc["semantic_rank"], DEFAULT_K
+            )
+
+    # print(semantic_results)
+    for i, result in enumerate(semantic_results, start=1):
+        doc_id = result["id"]
+        if doc_id not in combined_rank:
+            combined_rank[doc_id] = {
+                "document": result["document"],
+                "title": result["title"],
+                "bm25_rank": None,
+                "semantic_rank": i,
+                "rrf_score": 0.0,
+            }
+
+        doc = combined_rank[doc_id]
+        # print(f"semantic_results doc: {doc}")
+        if doc.get("semantic_rank") is None:
+            doc["semantic_rank"] = i
+            doc["rrf_score"] += rrf_score(doc["semantic_rank"], DEFAULT_K)
+
+        if doc.get("bm25_rank") and doc.get("semantic_rank"):
+            doc["rrf_score"] += rrf_score(doc["bm25_rank"], k) + rrf_score(
+                doc["semantic_rank"], k
+            )
+
+    hybrid_ranks = []
+    for doc_id, data in combined_rank.items():
+        result = format_search_result(
+            doc_id=doc_id,
+            title=data["title"],
+            document=data["document"],
+            bm25_rank=data["bm25_rank"],
+            semantic_rank=data["semantic_rank"],
+            rrf_score=data["rrf_score"],
+        )
+        hybrid_ranks.append(result)
+
+    return sorted(hybrid_ranks, key=lambda x: x["score"], reverse=True)
 
 
 def combine_search_results(
@@ -137,3 +236,20 @@ def combine_search_results(
         hybrid_results.append(result)
 
     return sorted(hybrid_results, key=lambda x: x["score"], reverse=True)
+
+
+def enhance_query(query: str, method: str) -> dict:
+    client = get_gemini_client()
+    match method:
+        case "spell":
+            resp = client.models.generate_content(
+                model="gemma-3-27b-it",
+                contents=f"""Fix any spelling errors in the user-provided movie search query below.
+                Correct only clear, high-confidence typos. Do not rewrite, add, remove, or reorder words.
+                Preserve punctuation and capitalization unless a change is required for a typo fix.
+                If there are no spelling errors, or if you're unsure, output the original query unchanged.
+                Output only the final query text, nothing else.
+                User query: "{query}"
+                """,
+            )
+            return {"method": method, "query": query, "enhanced_query": resp.text}

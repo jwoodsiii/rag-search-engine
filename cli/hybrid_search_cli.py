@@ -1,6 +1,6 @@
 import argparse
 
-from lib.hybrid_search import normalize, weighted_search
+from lib.hybrid_search import enhance_query, normalize, rrf_search, weighted_search
 
 
 def main() -> None:
@@ -22,9 +22,45 @@ def main() -> None:
         "--limit", type=int, default=5, help="Limit search results"
     )
 
+    rrf_search_parser = subparsers.add_parser(
+        "rrf-search", help="Run reciprocal rank fusion search with given query"
+    )
+    rrf_search_parser.add_argument("query", help="Query to search")
+    rrf_search_parser.add_argument(
+        "-k", type=int, default=60, help="Rank coefficient for RRF"
+    )
+    rrf_search_parser.add_argument(
+        "--limit", type=int, default=5, help="Limit search results"
+    )
+    rrf_search_parser.add_argument(
+        "--enhance", type=str, choices=["spell"], help="Query enhancement method"
+    )
+
     args = parser.parse_args()
 
     match args.command:
+        case "rrf-search":
+            if args.enhance is None:
+                query = args.query
+            else:
+                query = enhance_query(args.query, args.enhance)
+                print(
+                    f"Enhanced query ({query['method']}): {query['query']} -> {query['enhanced_query']}\n"
+                )
+                query = query["enhanced_query"]
+            result = rrf_search(query, args.k, args.limit)
+            print(f"RRF Search Results for '{result['query']}' (k={result['k']}):")
+            for i, res in enumerate(result["results"], 1):
+                print(f"{i}. {res['title']}")
+                # print(f"   RRF Score: {res.get('rrf_score', 0):.3f}")
+                # print(f"BM25 Rank: {res.get('bm25_rank', 0)}, Semantic Rank: {res.get('semantic_rank', 0)}")
+                metadata = res.get("metadata", {})
+                if "bm25_rank" in metadata and "semantic_rank" in metadata:
+                    print(
+                        f"   BM25: {metadata['bm25_rank']:.3f}, Semantic: {metadata['semantic_rank']:.3f}"
+                    )
+                print(f"   {res['document'][:100]}...")
+                print()
         case "weighted-search":
             result = weighted_search(args.query, args.alpha, args.limit)
 

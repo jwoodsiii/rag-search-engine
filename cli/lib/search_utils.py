@@ -2,16 +2,29 @@ import json
 import os
 import string
 
+from dotenv import load_dotenv
+from google import genai
 from nltk.stem import PorterStemmer
 
 DEFAULT_SEARCH_LIMIT = 5
 SCORE_PRECISION = 3
 DEFAULT_ALPHA = 0.5
+DEFAULT_K = 60
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 DATA_PATH = os.path.join(PROJECT_ROOT, "data", "movies.json")
 STOPWORDS_PATH = os.path.join(PROJECT_ROOT, "data", "stopwords.txt")
 CACHE_DIR = os.path.join(PROJECT_ROOT, "cache")
+
+
+def get_gemini_client() -> genai.Client:
+    load_dotenv()
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY environment variable not set")
+    client = genai.Client(api_key=api_key)
+
+    return client
 
 
 def load_movies() -> list[dict]:
@@ -54,7 +67,7 @@ def preprocess_text(text: str) -> str:
 
 
 def format_search_result(
-    doc_id: str, title: str, document: str, score: float, **metadata: Any
+    doc_id: str, title: str, document: str, score: float = 0.0, **metadata: Any
 ) -> dict[str, Any]:
     """Create standardized search result
 
