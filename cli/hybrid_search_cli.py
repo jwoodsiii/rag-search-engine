@@ -33,7 +33,10 @@ def main() -> None:
         "--limit", type=int, default=5, help="Limit search results"
     )
     rrf_search_parser.add_argument(
-        "--enhance", type=str, choices=["spell"], help="Query enhancement method"
+        "--enhance",
+        type=str,
+        choices=["spell", "rewrite"],
+        help="Query enhancement method",
     )
 
     args = parser.parse_args()
@@ -45,7 +48,7 @@ def main() -> None:
             else:
                 query = enhance_query(args.query, args.enhance)
                 print(
-                    f"Enhanced query ({query['method']}): {query['query']} -> {query['enhanced_query']}\n"
+                    f"Enhanced query ({query['method']}): {query['query']} -> {query['enhanced_query']}"
                 )
                 query = query["enhanced_query"]
             result = rrf_search(query, args.k, args.limit)
@@ -55,10 +58,13 @@ def main() -> None:
                 # print(f"   RRF Score: {res.get('rrf_score', 0):.3f}")
                 # print(f"BM25 Rank: {res.get('bm25_rank', 0)}, Semantic Rank: {res.get('semantic_rank', 0)}")
                 metadata = res.get("metadata", {})
-                if "bm25_rank" in metadata and "semantic_rank" in metadata:
-                    print(
-                        f"   BM25: {metadata['bm25_rank']:.3f}, Semantic: {metadata['semantic_rank']:.3f}"
-                    )
+                ranks = []
+                if metadata.get("bm25_rank"):
+                    ranks.append(f"BM25 Rank: {metadata['bm25_rank']}")
+                if metadata.get("semantic_rank"):
+                    ranks.append(f"Semantic Rank: {metadata['semantic_rank']}")
+                if ranks:
+                    print(f"   {', '.join(ranks)}")
                 print(f"   {res['document'][:100]}...")
                 print()
         case "weighted-search":

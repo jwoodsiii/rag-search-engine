@@ -145,7 +145,7 @@ def rrf_rank(
         doc = combined_rank[doc_id]
         if doc.get("bm25_rank") is None:
             doc["bm25_rank"] = i
-            doc["rrf_score"] += rrf_score(doc["bm25_rank"], DEFAULT_K)
+            doc["rrf_score"] += rrf_score(i, DEFAULT_K)
 
         if doc.get("bm25_rank") and doc.get("semantic_rank"):
             doc["rrf_score"] += rrf_score(doc["bm25_rank"], DEFAULT_K) + rrf_score(
@@ -168,7 +168,7 @@ def rrf_rank(
         # print(f"semantic_results doc: {doc}")
         if doc.get("semantic_rank") is None:
             doc["semantic_rank"] = i
-            doc["rrf_score"] += rrf_score(doc["semantic_rank"], DEFAULT_K)
+            doc["rrf_score"] += rrf_score(i, DEFAULT_K)
 
         if doc.get("bm25_rank") and doc.get("semantic_rank"):
             doc["rrf_score"] += rrf_score(doc["bm25_rank"], k) + rrf_score(
@@ -253,3 +253,31 @@ def enhance_query(query: str, method: str) -> dict:
                 """,
             )
             return {"method": method, "query": query, "enhanced_query": resp.text}
+        case "rewrite":
+            resp = client.models.generate_content(
+                model="gemma-3-27b-it",
+                contents=f"""Rewrite the user-provided movie search query below to be more specific and searchable.
+
+                Consider:
+                - Common movie knowledge (famous actors, popular films)
+                - Genre conventions (horror = scary, animation = cartoon)
+                - Keep the rewritten query concise (under 10 words)
+                - It should be a Google-style search query, specific enough to yield relevant results
+                - Don't use boolean logic
+
+                Examples:
+                - "that bear movie where leo gets attacked" -> "The Revenant Leonardo DiCaprio bear attack"
+                - "movie about bear in london with marmalade" -> "Paddington London marmalade"
+                - "scary movie with bear from few years ago" -> "bear horror movie 2015-2020"
+
+                If you cannot improve the query, output the original unchanged.
+                Output only the rewritten query text, nothing else.
+
+                User query: "{query}"
+                """,
+            )
+            return {
+                "method": method,
+                "query": query,
+                "enhanced_query": resp.text.strip(),
+            }
