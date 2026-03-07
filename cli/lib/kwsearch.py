@@ -249,8 +249,6 @@ def build_command() -> None:
     idx = InvertedIndex()
     idx.build()
     idx.save()
-    # docs = idx.get_documents("merida")
-    # print(f"First document for token `merida` = {docs[0]}")
 
 
 def search_command(query: str, limit: int = DEFAULT_SEARCH_LIMIT) -> list[dict]:
@@ -263,19 +261,9 @@ def search_command(query: str, limit: int = DEFAULT_SEARCH_LIMIT) -> list[dict]:
 
     results = []
     processed = set()
-    # print(f"idx: {idx.index.get('1')}")
-    # print(f"docmap: {idx.docmap.get(3586)}")
+
     for token in tokenize(query):
-        # print(
-        #     "LOOKUP:",
-        #     repr(token),
-        #     "exists_in_index?",
-        #     token in idx.index,
-        #     "lower_exists?",
-        #     token.lower() in idx.index,
-        # )
         docs = idx.get_documents(token)
-        # print("DOC COUNT:", len(docs), "FIRST:", docs[:5])
         for id in docs:
             if id in processed:
                 continue

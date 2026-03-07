@@ -1,18 +1,16 @@
-import json
 import os
-import time
-
-import numpy as np
-from google import genai
+from typing import Optional
 
 from .chunked_semantic_search import ChunkedSemanticSearch
 from .kwsearch import InvertedIndex
+from .query_enhancement import enhance_query
+from .reranking import rerank
 from .search_utils import (
     DEFAULT_ALPHA,
     DEFAULT_K,
     DEFAULT_SEARCH_LIMIT,
+    SEARCH_MULTIPLIER,
     format_search_result,
-    get_gemini_client,
     load_movies,
 )
 
@@ -30,32 +28,23 @@ class HybridSearch:
             self.idx.build()
             self.idx.save()
 
-    def _bm25_search(self, query: str, limit: int) -> dict[int, float]:
+    def _bm25_search(self, query: str, limit: int) -> list[dict]:
         self.idx.load()
         return self.idx.bm25_search(query, limit)
 
     def weighted_search(self, query: str, alpha, limit: int = 5):
         bm_results = self._bm25_search(query, limit * LIMIT_SCALE)
-        # # print(bm_results)
-        # doc_map = {doc["id"]: doc for doc in self.documents}
         semantic_results = self.semantic_search.search_chunks(
             query, limit * LIMIT_SCALE
         )
         combined = combine_search_results(bm_results, semantic_results, alpha)
         return combined[:limit]
 
-    def rrf_search(self, query: str, k, limit: int = 10) -> None:
+    def rrf_search(self, query: str, k, limit: int = 10) -> list[dict]:
         bm_results = self._bm25_search(query, limit * LIMIT_SCALE)
         semantic_results = self.semantic_search.search_chunks(
             query, limit * LIMIT_SCALE
         )
-        """
-            Combine results using rrf
-                - create dictionary mapping doc_ids to full documents and bm25 and semantic ranks
-                - for each document, calc rrf_score
-                - add score to each doc (if doc is in both searches sum rrf score)
-                - return results sorted by rrf score in descending order
-        """
         combined = rrf_rank(bm_results, semantic_results, k)
         return combined[:limit]
 
@@ -111,20 +100,37 @@ def weighted_search(
 
 
 def rrf_search(
-    query: str, k: int = DEFAULT_K, limit: int = DEFAULT_SEARCH_LIMIT
+    query: str,
+    k: int = DEFAULT_K,
+    enhance: Optional[str] = None,
+    rerank_method: Optional[str] = None,
+    limit: int = DEFAULT_SEARCH_LIMIT,
 ) -> dict:
     movies = load_movies()
     hs = HybridSearch(movies)
 
     original_query = query
+    enhanced_query = None
+    if enhance:
+        enhanced_query = enhance_query(query, method=enhance)
+        query = enhanced_query
 
-    search_limit = limit
+    search_limit = limit * SEARCH_MULTIPLIER if rerank_method else limit
     results = hs.rrf_search(query, k, search_limit)
+
+    reranked = False
+    if rerank_method:
+        results = rerank(query, results, method=rerank_method, limit=limit)
+        reranked = True
 
     return {
         "original_query": original_query,
+        "enhanced_query": enhanced_query,
+        "enhance_method": enhance,
         "query": query,
         "k": k,
+        "rerank_method": rerank_method,
+        "reranked": reranked,
         "results": results,
     }
 
@@ -167,7 +173,6 @@ def rrf_rank(
             }
 
         doc = combined_rank[doc_id]
-        # print(f"semantic_results doc: {doc}")
         if doc.get("semantic_rank") is None:
             doc["semantic_rank"] = i
             doc["rrf_score"] += rrf_score(i, DEFAULT_K)
@@ -238,180 +243,3 @@ def combine_search_results(
         hybrid_results.append(result)
 
     return sorted(hybrid_results, key=lambda x: x["score"], reverse=True)
-
-
-def enhance_query(query: str, method: str) -> dict:
-    client = get_gemini_client()
-    match method:
-        case "spell":
-            resp = client.models.generate_content(
-                model="gemma-3-27b-it",
-                contents=f"""Fix any spelling errors in the user-provided movie search query below.
-                Correct only clear, high-confidence typos. Do not rewrite, add, remove, or reorder words.
-                Preserve punctuation and capitalization unless a change is required for a typo fix.
-                If there are no spelling errors, or if you're unsure, output the original query unchanged.
-                Output only the final query text, nothing else.
-                User query: "{query}"
-                """,
-            )
-            return {
-                "method": method,
-                "query": query,
-                "enhanced_query": resp.text.strip(),
-            }
-        case "rewrite":
-            resp = client.models.generate_content(
-                model="gemma-3-27b-it",
-                contents=f"""Rewrite the user-provided movie search query below to be more specific and searchable.
-
-                Consider:
-                - Common movie knowledge (famous actors, popular films)
-                - Genre conventions (horror = scary, animation = cartoon)
-                - Keep the rewritten query concise (under 10 words)
-                - It should be a Google-style search query, specific enough to yield relevant results
-                - Don't use boolean logic
-
-                Examples:
-                - "that bear movie where leo gets attacked" -> "The Revenant Leonardo DiCaprio bear attack"
-                - "movie about bear in london with marmalade" -> "Paddington London marmalade"
-                - "scary movie with bear from few years ago" -> "bear horror movie 2015-2020"
-
-                If you cannot improve the query, output the original unchanged.
-                Output only the rewritten query text, nothing else.
-
-                User query: "{query}"
-                """,
-            )
-            return {
-                "method": method,
-                "query": query,
-                "enhanced_query": resp.text.strip(),
-            }
-        case "expand":
-            resp = client.models.generate_content(
-                model="gemma-3-27b-it",
-                contents=f"""Expand the user-provided movie search query below with related terms.
-
-                Add synonyms and related concepts that might appear in movie descriptions.
-                Keep expansions relevant and focused.
-                Output only the additional terms; they will be appended to the original query.
-
-                Examples:
-                - "scary bear movie" -> "scary horror grizzly bear movie terrifying film"
-                - "action movie with bear" -> "action thriller bear chase fight adventure"
-                - "comedy with bear" -> "comedy funny bear humor lighthearted"
-
-                User query: "{query}"
-                """,
-            )
-            return {
-                "method": method,
-                "query": query,
-                "enhanced_query": f"{query} {resp.text.strip()} i.q.",
-            }
-
-
-def rerank(query: str, method: str, results: list[dict]) -> list[dict]:
-    client = get_gemini_client()
-    output = list()
-    match method:
-        case "individual":
-            for doc in results:
-                resp = client.models.generate_content(
-                    model="gemma-3-27b-it",
-                    contents=f"""Rate how well this movie matches the search query.
-
-                    Query: "{query}"
-                    Movie: {doc.get("title", "")} - {doc.get("document", "")}
-
-                    Consider:
-                    - Direct relevance to query
-                    - User intent (what they're looking for)
-                    - Content appropriateness
-
-                    Rate 0-10 (10 = perfect match).
-                    Output ONLY the number in your response, no other text or explanation.
-
-                    Score:""",
-                )
-                time.sleep(4)
-                metadata = doc.get("metadata", {})
-
-                if metadata.get("bm25_rank"):
-                    bm25_rank = metadata["bm25_rank"]
-                if metadata.get("semantic_rank"):
-                    semantic_rank = metadata["semantic_rank"]
-                if metadata.get("rrf_score"):
-                    rrf_score = metadata["rrf_score"]
-                output.append(
-                    {
-                        "doc_id": doc["id"],
-                        "title": doc["title"],
-                        "document": doc["document"],
-                        "score": resp.text,
-                        "bm25_rank": bm25_rank,
-                        "semantic_rank": semantic_rank,
-                        "rrf_score": rrf_score,
-                    }
-                )
-
-            return sorted(output, key=lambda x: float(x["score"]), reverse=True)[:3]
-
-        case "batch":
-            doc_list_str = "\n".join(
-                [
-                    f"ID: {doc.get('id', '')}, Title: {doc.get('title', '')}, Document: {doc.get('document', '')[:500]}"
-                    for doc in results
-                ]
-            )
-            # for doc in results:
-            #     print(f"id: {doc.get('id', '')}")
-
-            movie_lookup = {doc["id"]: doc for doc in results}
-            # print(movie_lookup)
-
-            resp = client.models.generate_content(
-                model="gemma-3-27b-it",
-                contents=f"""Rank the movies listed below by relevance to the following search query.
-
-                Query: "{query}"
-
-                Movies:
-                {doc_list_str}
-
-                Return ONLY the movie IDs in order of relevance (best match first). Return a valid JSON list, nothing else.
-
-                For example:
-                [75, 12, 34, 2, 1]
-
-                Ranking:""",
-            )
-
-            res = json.loads(resp.text)
-            # print(res)
-            # print(f"Lookup key type: {type(list(movie_lookup.keys())[0])}")
-            # print(f"LLM ID type: {type(res[0])}")
-            output = list()
-            for rank, id in enumerate(res, start=1):
-                if id in movie_lookup:
-                    metadata = movie_lookup[id].get("metadata", {})
-
-                    if metadata.get("bm25_rank"):
-                        bm25_rank = metadata["bm25_rank"]
-                    if metadata.get("semantic_rank"):
-                        semantic_rank = metadata["semantic_rank"]
-                    if metadata.get("rrf_score"):
-                        rrf_score = metadata["rrf_score"]
-                    output.append(
-                        {
-                            "doc_id": id,
-                            "title": movie_lookup[id].get("title", ""),
-                            "document": movie_lookup[id].get("document", ""),
-                            "score": rank,
-                            "bm25_rank": movie_lookup[id].get("bm25_rank", 0),
-                            "semantic_rank": movie_lookup[id].get("semantic_rank", 0),
-                            "rrf_score": movie_lookup[id].get("rrf_score", 0),
-                        }
-                    )
-
-            return sorted(output, key=lambda x: x["score"])[:3]
