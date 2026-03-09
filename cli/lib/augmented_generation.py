@@ -12,6 +12,34 @@ client = get_gemini_client()
 model = "gemma-3-27b-it"
 
 
+def generate_qa(query: str, search_results, limit: int = 5) -> str:
+    context = ""
+    for result in search_results[:limit]:
+        context += f"{result['title']}: {result['document']}\n\n"
+
+    resp = client.models.generate_content(
+        model=model,
+        contents=f"""Answer the user's question based on the provided movies that are available on Hoopla.
+
+        This should be tailored to Hoopla users. Hoopla is a movie streaming service.
+
+        Question: {query}
+
+        Documents:
+        {context}
+
+        Instructions:
+        - Answer questions directly and concisely
+        - Be casual and conversational
+        - Don't be cringe or hype-y
+        - Talk like a normal person would in a chat conversation
+
+        Answer:""",
+    )
+    answer_text = (resp.text or "").strip()
+    return answer_text
+
+
 def generate_citation(query: str, search_results, limit: int = 5) -> str:
     context = ""
     for result in search_results[:limit]:
