@@ -4,6 +4,7 @@ import time
 
 from dotenv import load_dotenv
 from google import genai
+from sentence_transformers import CrossEncoder
 
 from .search_utils import get_gemini_client
 
@@ -83,11 +84,31 @@ def llm_rerank_batch(query: str, results: list[dict], limit: int = 5) -> list[di
     return output[:limit]
 
 
+def rerank_cross_encoder(query: str, results: list[dict], limit: int = 5) -> list[dict]:
+    pairs = [
+        [query, f"{doc.get('title', '')} - {doc.get('document', '')}"]
+        for doc in results
+    ]
+    # for doc in results:
+    #     pairs.append([query, f"{doc.get('title', '')} - {doc.get('document', '')}"])
+    cross_encoder = CrossEncoder("cross-encoder/ms-marco-TinyBERT-L2-v2")
+
+    scores = cross_encoder.predict(pairs)
+    for doc, score in zip(results, scores):
+        doc["crossencoder_score"] = float(score)
+
+    results.sort(key=lambda x: x["crossencoder_score"], reverse=True)
+
+    return results[:limit]
+
+
 def rerank(query: str, results: list[dict], method: str, limit: int = 5) -> list[dict]:
     match method:
         case "individual":
             return llm_rerank_individual(query, results, limit)
         case "batch":
             return llm_rerank_batch(query, results, limit)
+        case "cross_encoder":
+            return rerank_cross_encoder(query, results, limit)
         case _:
             return []

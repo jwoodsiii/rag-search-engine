@@ -46,7 +46,7 @@ def main() -> None:
         "--rerank-method",
         type=str,
         default="",
-        choices=["individual", "batch"],
+        choices=["individual", "batch", "cross_encoder"],
     )
 
     args = parser.parse_args()
@@ -74,6 +74,10 @@ def main() -> None:
                     print(f"   Re-rank Score: {res.get('individual_score', 0):.3f}/10")
                 if "batch_rank" in res:
                     print(f"   Re-rank Rank: {res.get('batch_rank', 0)}")
+                if "crossencoder_score" in res:
+                    print(
+                        f"    Cross Encoder Score: {res.get('crossencoder_score', 0):.3f}"
+                    )
                 print(f"   RRF Score: {res.get('score', 0):.3f}")
                 metadata = res.get("metadata", {})
                 ranks = []
