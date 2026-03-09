@@ -12,6 +12,38 @@ client = get_gemini_client()
 model = "gemma-3-27b-it"
 
 
+def generate_citation(query: str, search_results, limit: int = 5) -> str:
+    context = ""
+    for result in search_results[:limit]:
+        context += f"{result['title']}: {result['document']}\n\n"
+
+    resp = client.models.generate_content(
+        model=model,
+        contents=f"""Answer the question or provide information based on the provided documents.
+
+        This should be tailored to Hoopla users. Hoopla is a movie streaming service.
+
+        If not enough information is available to give a good answer, say so but give as good of an answer as you can while citing the sources you have.
+
+        Query: {query}
+
+        Documents:
+        {context}
+
+        Instructions:
+        - Provide a comprehensive answer that addresses the query
+        - Cite sources using [1], [2], etc. format when referencing information
+        - If sources disagree, mention the different viewpoints
+        - If the answer isn't in the documents, say "I don't have enough information"
+        - Be direct and informative
+
+        Answer:""",
+    )
+
+    ans_text = (resp.text or "").strip()
+    return ans_text
+
+
 def generate_answer(query: str, search_results, limit: int = 5) -> str:
     context = ""
     for result in search_results[:limit]:

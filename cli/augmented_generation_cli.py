@@ -1,6 +1,11 @@
 import argparse
 
-from lib.augmented_generation import generate_answer, generate_summary, rag_command
+from lib.augmented_generation import (
+    generate_answer,
+    generate_citation,
+    generate_summary,
+    rag_command,
+)
 from lib.hybrid_search import rrf_search
 
 
@@ -20,6 +25,12 @@ def main():
         "query", type=str, help="Search query for summarization"
     )
     summarize_parser.add_argument("--limit", type=int, default=5, help="Query limits")
+
+    citations_parser = subparsers.add_parser(
+        "citations", help="Generate citations from search results"
+    )
+    citations_parser.add_argument("query", type=str, help="Search query for citations")
+    citations_parser.add_argument("--limit", type=int, default=5, help="Query limits")
 
     args = parser.parse_args()
 
@@ -41,6 +52,15 @@ def main():
                 print(f"- {doc['title']}")
 
             print("LLM Summary")
+            print(result["answer"])
+
+        case "citations":
+            result = rag_command(args.query, generate_citation)
+            print("Search Results:")
+            for doc in result["search_results"]:
+                print(f"- {doc['title']}")
+
+            print("LLM Answer")
             print(result["answer"])
         case _:
             parser.print_help()
