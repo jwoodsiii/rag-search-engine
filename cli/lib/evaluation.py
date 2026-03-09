@@ -1,4 +1,7 @@
+from decimal import DivisionByZero
+
 from .hybrid_search import HybridSearch
+from .kwsearch import InvertedIndex
 from .search_utils import (
     load_golden_dataset,
     load_movies,
@@ -28,12 +31,21 @@ def recall_at_k(
     return relevant_count / len(relevant_docs)
 
 
+def f1(precision: float, recall: float) -> float:
+    try:
+        return 2 * (precision * recall) / (precision + recall)
+    except ZeroDivisionError:
+        return 0.0
+
+
 def evaluate_command(limit: int = 5) -> dict:
     movies = load_movies()
     golden_data = load_golden_dataset()
     test_cases = golden_data["test_cases"]
 
     semantic_search = SemanticSearch()
+    idx = InvertedIndex()
+    idx.load()
     semantic_search.load_or_create_embeddings(movies)
     hybrid_search = HybridSearch(movies)
 
@@ -43,24 +55,24 @@ def evaluate_command(limit: int = 5) -> dict:
         query = test_case["query"]
         relevant_docs = set(test_case["relevant_docs"])
         search_results = hybrid_search.rrf_search(query, k=60, limit=limit)
+        # search_results = semantic_search.search(query, limit=limit)
+        # search_results = idx.bm25_search(query, limit=limit)
         retrieved_docs = []
         for result in search_results:
             title = result.get("title", "")
             if title:
                 retrieved_docs.append(title)
 
-        # Temporary debug
-        matches = [title for title in retrieved_docs[:limit] if title in relevant_docs]
-        print(f"Debug Matches: {matches}")
+        print(f"Retrieved docs: {retrieved_docs[:limit]}")
+        print(f"Relevant docs: {relevant_docs}")
         precision = precision_at_k(retrieved_docs, relevant_docs, limit)
         recall = recall_at_k(retrieved_docs, relevant_docs, limit)
-        if query == "car racing":
-            precision = 0.4000
-            recall = 0.5714
+        # print(f"Precision: {precision}, Recall: {recall}")
 
         results_by_query[query] = {
             "precision": precision,
             "recall": recall,
+            "f1": f1(precision, recall),
             "retrieved": retrieved_docs[:limit],
             "relevant": list(relevant_docs),
         }

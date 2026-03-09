@@ -1,3 +1,4 @@
+import json
 import os
 from typing import Optional
 
@@ -11,10 +12,13 @@ from .search_utils import (
     DEFAULT_SEARCH_LIMIT,
     SEARCH_MULTIPLIER,
     format_search_result,
+    get_gemini_client,
     load_movies,
 )
 
-LIMIT_SCALE = 6
+LIMIT_SCALE = 500
+client = get_gemini_client()
+model = "gemma-3-27b-it"
 
 
 class HybridSearch:
@@ -45,7 +49,7 @@ class HybridSearch:
         semantic_results = self.semantic_search.search_chunks(
             query, limit * LIMIT_SCALE
         )
-        print(f"Running rrf_search with limit={limit * LIMIT_SCALE}")
+        # print(f"Running rrf_search with limit={limit * LIMIT_SCALE}")
         combined = rrf_rank(bm_results, semantic_results, k)
         return combined[:limit]
 
@@ -196,6 +200,35 @@ def rrf_rank(
         hybrid_ranks.append(result)
 
     return sorted(hybrid_ranks, key=lambda x: x["score"], reverse=True)
+
+
+def evaluate_results(query: str, rrf_results: list[str]) -> None:
+    resp = client.models.generate_content(
+        model=model,
+        contents=f"""Rate how relevant each result is to this query on a 0-3 scale:
+
+        Query: "{query}"
+
+        Results:
+        {chr(10).join(rrf_results)}
+
+        Scale:
+        - 3: Highly relevant
+        - 2: Relevant
+        - 1: Marginally relevant
+        - 0: Not relevant
+
+        Do NOT give any numbers other than 0, 1, 2, or 3.
+
+        Return ONLY the scores in the same order you were given the documents. Return a valid JSON list, nothing else. For example:
+
+        [2, 0, 3, 2, 0, 1]""",
+    )
+
+    scores_text = (resp.text or "").strip()
+    scores = json.loads(scores_text)
+    for title, score in zip(rrf_results, scores):
+        print(f"{title}: {score}/3")
 
 
 def combine_search_results(

@@ -1,6 +1,7 @@
 import argparse
 
 from lib.hybrid_search import (
+    evaluate_results,
     normalize,
     rrf_search,
     weighted_search,
@@ -48,6 +49,9 @@ def main() -> None:
         default="",
         choices=["individual", "batch", "cross_encoder"],
     )
+    rrf_search_parser.add_argument(
+        "--evaluate", action="store_true", help="Evaluate results using RRF scores"
+    )
 
     args = parser.parse_args()
 
@@ -67,9 +71,10 @@ def main() -> None:
             print(
                 f"Reciprocal Rank Fusion Results for '{result['query']}' (k={result['k']}):"
             )
-
+            rrf_results = []
             for i, res in enumerate(result["results"], 1):
                 print(f"{i}. {res['title']}")
+                rrf_results.append(f"{i}. {res['title']}")
                 if "individual_score" in res:
                     print(f"   Re-rank Score: {res.get('individual_score', 0):.3f}/10")
                 if "batch_rank" in res:
@@ -89,6 +94,8 @@ def main() -> None:
                     print(f"   {', '.join(ranks)}")
                 print(f"   {res['document'][:100]}...")
                 print()
+            if args.evaluate:
+                evaluate_results(args.query, rrf_results)
 
         case "weighted-search":
             result = weighted_search(args.query, args.alpha, args.limit)
