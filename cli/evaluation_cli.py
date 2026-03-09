@@ -36,9 +36,16 @@ def main():
             retrv = []
             for r in res["results"]:
                 retrv.append(r.get("title", ""))
+            relevant_retrieved = set(retrv).intersection(
+                set(test.get("relevant_docs", []))
+            )
+            relevant_documents = test.get("relevant_docs", [])
             print(f"- Query: {test.get('query', '')}")
             print(
-                f"    - Precision@{limit}: {float(len(set(retrv).intersection(set(test.get('relevant_docs', [])))) / len(retrv)):.4f}"
+                f"    - Precision@{limit}: {float(len(relevant_retrieved)) / len(retrv):.4f}"
+            )
+            print(
+                f"    - Recall@{limit}: {float(len(relevant_retrieved)) / len(relevant_documents):.4f}"
             )
             print(f"    - Retrieved: {', '.join(retrv)}")
             print(f"    - Relevant: {', '.join(test.get('relevant_docs', []))}")

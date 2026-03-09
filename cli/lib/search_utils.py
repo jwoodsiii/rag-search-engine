@@ -41,6 +41,11 @@ def load_stopwords() -> list[str]:
     return data
 
 
+def load_golden_dataset() -> dict:
+    with open(GOLDEN_PATH, "r") as f:
+        return json.load(f)
+
+
 def tokenize(line: str) -> list[str]:
     stemmer = PorterStemmer()
     text = preprocess_text(line)
