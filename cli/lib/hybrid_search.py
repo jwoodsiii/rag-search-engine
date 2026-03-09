@@ -14,7 +14,7 @@ from .search_utils import (
     load_movies,
 )
 
-LIMIT_SCALE = 500
+LIMIT_SCALE = 6
 
 
 class HybridSearch:
@@ -45,6 +45,7 @@ class HybridSearch:
         semantic_results = self.semantic_search.search_chunks(
             query, limit * LIMIT_SCALE
         )
+        print(f"Running rrf_search with limit={limit * LIMIT_SCALE}")
         combined = rrf_rank(bm_results, semantic_results, k)
         return combined[:limit]
 

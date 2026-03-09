@@ -1,13 +1,9 @@
 import argparse
-import json
 
-from lib.hybrid_search import (
-    rrf_search,
-)
-from lib.search_utils import DEFAULT_K, GOLDEN_PATH
+from lib.evaluation import evaluate_command
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Search Evaluation CLI")
     parser.add_argument(
         "--limit",
@@ -17,38 +13,16 @@ def main():
     )
 
     args = parser.parse_args()
-    limit = args.limit
+    result = evaluate_command(args.limit)
 
-    # run evaluation logic here
-    with open(GOLDEN_PATH, "r") as f:
-        data = json.load(f)
-        print(f"k={limit}")
-        # print(data)
-        test_cases = data.get("test_cases", "")
-        if test_cases == "":
-            raise ValueError("No test cases found in golden file")
-        for test in test_cases:
-            query = test.get("query", "")
-            print(
-                f"Query: {query}\nRelevant Documents: {', '.join(test.get('relevant_docs', []))}"
-            )
-            res = rrf_search(query, DEFAULT_K, limit=limit)
-            retrv = []
-            for r in res["results"]:
-                retrv.append(r.get("title", ""))
-            relevant_retrieved = set(retrv).intersection(
-                set(test.get("relevant_docs", []))
-            )
-            relevant_documents = test.get("relevant_docs", [])
-            print(f"- Query: {test.get('query', '')}")
-            print(
-                f"    - Precision@{limit}: {float(len(relevant_retrieved)) / len(retrv):.4f}"
-            )
-            print(
-                f"    - Recall@{limit}: {float(len(relevant_retrieved)) / len(relevant_documents):.4f}"
-            )
-            print(f"    - Retrieved: {', '.join(retrv)}")
-            print(f"    - Relevant: {', '.join(test.get('relevant_docs', []))}")
+    print(f"k={args.limit}\n")
+    for query, res in result["results"].items():
+        print(f"- Query: {query}")
+        print(f"  - Precision@{args.limit}: {res['precision']:.4f}")
+        print(f"  - Recall@{args.limit}: {res['recall']:.4f}")
+        print(f"  - Retrieved: {', '.join(res['retrieved'])}")
+        print(f"  - Relevant: {', '.join(res['relevant'])}")
+        print()
 
 
 if __name__ == "__main__":
